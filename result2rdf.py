@@ -9,10 +9,10 @@ fieldnames = ["benchmarkID", "format", "dataset", "triplestore", "noclients", "q
               "failed", "totaltime", "resultsize"]
 
 
-def repair_result_file(rdf_file, cleaned_rdf_file):
+def repair_result_file(rdf_file, cleaned_rdf_file, input_dir):
     # clean the file
-    with open(cleaned_rdf_file, 'w') as out_file:
-        with open(rdf_file) as in_file:
+    with open(os.path.join(input_dir, cleaned_rdf_file), 'w') as out_file:
+        with open(os.path.join(input_dir, rdf_file)) as in_file:
 
             line = in_file.readline()
             while line:
@@ -48,7 +48,7 @@ def extract_meta_data(rdf_graph):
     return ID, format, dataset, no_clients, triplestore, starttime, runtime
 
 
-def convert_result_file(rdf_file: str, output_dir: str) -> str:
+def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> str:
     """
     Converts a input file
     :param rdf_file: the IGUANA output file to be processed
@@ -56,11 +56,11 @@ def convert_result_file(rdf_file: str, output_dir: str) -> str:
     """
     cleaned_rdf_file = "cleaned_{}".format(rdf_file)
 
-    repair_result_file(rdf_file, cleaned_rdf_file)
+    repair_result_file(rdf_file, cleaned_rdf_file, input_dir)
 
     # load the file
     data = rdf.Graph()
-    data.parse(cleaned_rdf_file, format="nt")
+    data.parse(os.path.join(input_dir, cleaned_rdf_file), format="nt")
 
     ID, format, dataset, no_clients, triplestore, starttime, runtime = extract_meta_data(data)
 
@@ -110,5 +110,5 @@ def convert_result_file(rdf_file: str, output_dir: str) -> str:
                 "totaltime": binding["totaltime"],
                 "resultsize": binding["resultsize"]
             })
-    os.remove(cleaned_rdf_file)
+    os.remove(os.path.join(input_dir, cleaned_rdf_file))
     return os.path.join(output_dir, outputfile)
