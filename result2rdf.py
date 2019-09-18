@@ -1,7 +1,12 @@
-import rdflib as rdf
 import csv
-import os
 import json
+import os
+
+import dateutil.parser
+import rdflib as rdf
+
+fieldnames = ["benchmarkID", "format", "dataset", "triplestore", "noclients", "queryID", "qps", "succeeded",
+              "failed", "totaltime", "resultsize"]
 
 
 def repair_result_file(rdf_file, cleaned_rdf_file):
@@ -20,7 +25,7 @@ def extract_meta_data(rdf_graph):
     global dataset, triplestore, ID, no_clients, format
     r = rdf_graph.query(
         "SELECT DISTINCT ?starttime WHERE {[] <http://www.w3.org/2000/01/rdf-schema#startDate> ?starttime.}")
-    starttime = next(iter(r))["starttime"]
+    starttime = dateutil.parser.parse(next(iter(r))["starttime"])
 
     r = rdf_graph.query(
         "SELECT DISTINCT ?runtime WHERE {[] <http://iguana-benchmark.eu/properties/timeLimit> ?runtime.}")
@@ -59,8 +64,6 @@ def convert_result_file(rdf_file: str, output_dir: str) -> str:
 
     ID, format, dataset, no_clients, triplestore, starttime, runtime = extract_meta_data(data)
 
-    print("{} {} {} {} {}".format(ID, format, dataset, no_clients, triplestore))
-
     benchmark_logs = data.query(
         "SELECT ?query ?queryID ?qps ?succeeded ?failed ?totaltime ?resultsize "
         "WHERE {"
@@ -72,14 +75,17 @@ def convert_result_file(rdf_file: str, output_dir: str) -> str:
         "?query <http://iguana-benchmark.eu/properties/resultSize> ?resultsize ."
         "}")
 
-    outputfile = "{}_{}_{}clients_{}_starttime".format(format, dataset, no_clients, triplestore, starttime)
+    outputfile = "{}_{}_{:02d}-clients_{}_{}".format(format, dataset, int(no_clients), triplestore,
+                                                     starttime.strftime("%Y-%m-%d_%H-%M-%S"))
     os.makedirs(output_dir, exist_ok=True)
 
     with open(os.path.join(output_dir, outputfile + ".json"), "w") as jsonfile:
-        jsonfile.write(json.dumps({'starttime': starttime,
+        jsonfile.write(json.dumps({'benchmarkID': ID,
+                                   'starttime': str(starttime),
                                    'runtime': runtime,
+                                   "format": format,
                                    'dataset': dataset,
-                                   'no_clients': no_clients,
+                                   'noclients': no_clients,
                                    'triplestore': triplestore},
                                   sort_keys=True,
                                   indent=4),
@@ -88,23 +94,21 @@ def convert_result_file(rdf_file: str, output_dir: str) -> str:
     output_csv = os.path.join(output_dir, outputfile + ".csv")
     with open(output_csv, 'w') as csvfile:
         csvwriter = csv.DictWriter(csvfile,
-                                   fieldnames=["Benchmark ID", "Format", "Dataset", "Triplestore", "No_clients",
-                                               "Query ID",
-                                               "qps", "succeeded", "failed", "totaltime", "result size"])
+                                   fieldnames=fieldnames)
         csvwriter.writeheader()
         for binding in benchmark_logs:
             csvwriter.writerow({
-                "Benchmark ID": ID,
-                "Format": format,
-                "Dataset": dataset,
-                "Triplestore": triplestore,
-                "No_clients": no_clients,
-                "Query ID": binding["queryID"].split("sparql")[1],
+                "benchmarkID": ID,
+                "format": format,
+                "dataset": dataset,
+                "triplestore": triplestore,
+                "noclients": no_clients,
+                "queryID": binding["queryID"].split("sparql")[1],
                 "qps": binding["qps"],
                 "succeeded": binding["succeeded"],
                 "failed": binding["failed"],
                 "totaltime": binding["totaltime"],
-                "result size": binding["resultsize"]
+                "resultsize": binding["resultsize"]
             })
     os.remove(cleaned_rdf_file)
-    return output_csv
+    return os.path.join(output_dir, outputfile)
