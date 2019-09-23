@@ -5,8 +5,8 @@ import os
 import dateutil.parser
 import rdflib as rdf
 
-fieldnames = ["benchmarkID", "format", "dataset", "triplestore", "noclients", "queryID", "qps", "succeeded",
-              "failed", "totaltime", "resultsize"]
+fieldnames = ["starttime", "benchmarkID", "format", "dataset", "triplestore", "noclients", "queryID", "qps", "succeeded",
+              "failed", "totaltime", "resultsize", "penalizedtime"]
 
 
 def repair_result_file(rdf_file, cleaned_rdf_file, input_dir):
@@ -97,7 +97,18 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> str:
                                    fieldnames=fieldnames)
         csvwriter.writeheader()
         for binding in benchmark_logs:
+            # TODO: make penalty time configureable
+            penalty_time = 180000
+
+            total_time = int(binding["totaltime"])
+            failed = int(binding["failed"])
+
+            penalized_time = total_time
+            if failed > 0 and total_time < penalty_time * failed:
+                penalized_time = penalized_time + penalty_time * failed
+
             csvwriter.writerow({
+                "starttime": starttime,
                 "benchmarkID": ID,
                 "format": format,
                 "dataset": dataset,
@@ -105,10 +116,11 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> str:
                 "noclients": no_clients,
                 "queryID": binding["queryID"].split("sparql")[1],
                 "qps": binding["qps"],
-                "succeeded": binding["succeeded"],
-                "failed": binding["failed"],
-                "totaltime": binding["totaltime"],
-                "resultsize": binding["resultsize"]
+                "succeeded": int(binding["succeeded"]),
+                "failed": failed,
+                "totaltime": total_time,
+                "resultsize": int(binding["resultsize"]) if str(binding["resultsize"]) != '?' else '',
+                "penalizedtime": penalized_time
             })
     os.remove(os.path.join(input_dir, cleaned_rdf_file))
     return os.path.join(output_dir, outputfile)
