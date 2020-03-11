@@ -5,8 +5,9 @@ import os
 import dateutil.parser
 import rdflib as rdf
 
-fieldnames = ["starttime", "benchmarkID", "format", "dataset", "triplestore", "noclients", "queryID", "qps", "succeeded",
-              "failed", "totaltime", "resultsize", "penalizedtime"]
+fieldnames = ["starttime", "benchmarkID", "format", "dataset", "triplestore", "noclients", "queryID", "qps",
+              "succeeded", "failed", "timeouts", "unknownExceptions", "wrongCodes", "totaltime", "resultsize",
+              "penalizedtime"]
 
 
 def repair_result_file(rdf_file, cleaned_rdf_file, input_dir):
@@ -44,7 +45,8 @@ def extract_meta_data(rdf_graph):
     split = str(task_clients["task"]).split("/")
     ID = "{}/{}/{}".format(split[-3], split[-2], split[-1])
     no_clients = task_clients["clients"]
-    if rdf_graph.query('ASK {?x <http://iguana-benchmark.eu/properties/workerType> "CLIInputWorker"^^<http://www.w3.org/2001/XMLSchema#string> }' ):
+    if rdf_graph.query(
+            'ASK {?x <http://iguana-benchmark.eu/properties/workerType> "CLIInputWorker"^^<http://www.w3.org/2001/XMLSchema#string> }'):
         format = "CLI"
     else:
         format = "HTTP"
@@ -57,23 +59,24 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> str:
     :param rdf_file: the IGUANA output file to be processed
     :return: the file where the result was written to
     """
-    cleaned_rdf_file = "cleaned_{}".format(rdf_file)
-
-    repair_result_file(rdf_file, cleaned_rdf_file, input_dir)
 
     # load the file
     data = rdf.Graph()
-    data.parse(os.path.join(input_dir, cleaned_rdf_file), format="nt")
+    data.parse(os.path.join(input_dir, rdf_file), format="nt")
 
     ID, format, dataset, no_clients, triplestore, starttime, runtime = extract_meta_data(data)
 
     benchmark_logs = data.query(
-        "SELECT ?query ?queryID ?qps ?succeeded ?failed ?totaltime ?resultsize "
+        "SELECT ?query ?queryID ?qps ?succeeded ?failed ?wrongCodes ?unknownExceptions ?timeouts ?totaltime ?resultsize "
         "WHERE {"
         "?query <http://iguana-benchmark.eu/properties/queriesPerSecond> ?qps ."
-        "?query <http://iguana-benchmark.eu/properties/id> ?queryID . "
+        "?query <http://iguana-benchmark.eu/properties/queryID> ?queryRes . "
+        "?queryRes <http://www.w3.org/2000/01/rdf-schema#ID> ?queryID . "
         "?query <http://iguana-benchmark.eu/properties/failed> ?failed ."
-        "?query <http://iguana-benchmark.eu/properties/succeded> ?succeeded ."
+        "?query <http://iguana-benchmark.eu/properties/wrongCodes> ?wrongCodes ."
+        "?query <http://iguana-benchmark.eu/properties/unknownExceptions> ?unknownExceptions ."
+        "?query <http://iguana-benchmark.eu/properties/succeeded> ?succeeded ."
+        "?query <http://iguana-benchmark.eu/properties/timeouts> ?timeouts ."
         "?query <http://iguana-benchmark.eu/properties/totalTime> ?totaltime ."
         "?query <http://iguana-benchmark.eu/properties/resultSize> ?resultsize ."
         "}")
@@ -100,11 +103,14 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> str:
                                    fieldnames=fieldnames)
         csvwriter.writeheader()
         for binding in benchmark_logs:
-            # TODO: make penalty time configureable
+            # TODO: make penalty time configurable
             penalty_time = 180000
 
             total_time = int(binding["totaltime"])
             failed = int(binding["failed"])
+            timeouts = int(binding["timeouts"])
+            wrongCodes = int(binding["wrongCodes"])
+            unknownExceptions = int(binding["unknownExceptions"])
 
             penalized_time = total_time
             if failed > 0 and total_time < penalty_time * failed:
@@ -117,13 +123,15 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> str:
                 "dataset": dataset,
                 "triplestore": triplestore,
                 "noclients": no_clients,
-                "queryID": binding["queryID"].split("sparql")[1],
+                "queryID": binding["queryID"],
                 "qps": binding["qps"],
                 "succeeded": int(binding["succeeded"]),
                 "failed": failed,
+                "wrongCodes": wrongCodes,
+                "unknownExceptions": unknownExceptions,
+                "timeouts": timeouts,
                 "totaltime": total_time,
                 "resultsize": int(binding["resultsize"]) if str(binding["resultsize"]) != '?' else '',
                 "penalizedtime": penalized_time
             })
-    os.remove(os.path.join(input_dir, cleaned_rdf_file))
     return os.path.join(output_dir, outputfile)
