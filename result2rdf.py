@@ -46,10 +46,10 @@ def extract_meta_data(rdf_graph):
     ID = "{}/{}/{}".format(split[-3], split[-2], split[-1])
     no_clients = task_clients["clients"]
     if rdf_graph.query(
-            'ASK {?x <http://iguana-benchmark.eu/properties/workerType> "CLIInputWorker"^^<http://www.w3.org/2001/XMLSchema#string> }'):
-        format = "CLI"
-    else:
+            'ASK {?x <http://iguana-benchmark.eu/properties/workerType> "SPARQLWorker" }'):
         format = "HTTP"
+    else:
+        format = "CLI"
     return ID, format, dataset, no_clients, triplestore, starttime, runtime
 
 
