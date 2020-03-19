@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+from typing import List, Generator, Iterator
 
 import dateutil.parser
 import rdflib as rdf
@@ -10,50 +11,47 @@ fieldnames = ["starttime", "benchmarkID", "format", "dataset", "triplestore", "n
               "penalizedtime"]
 
 
-def repair_result_file(rdf_file, cleaned_rdf_file, input_dir):
-    # clean the file
-    with open(os.path.join(input_dir, cleaned_rdf_file), 'w') as out_file:
-        with open(os.path.join(input_dir, rdf_file)) as in_file:
-
-            line = in_file.readline()
-            while line:
-                if not ("<http://www.w3.org/2000/01/rdf-schema#label>" in line and "sparql" in line):
-                    out_file.write(line)
-                line = in_file.readline()
-
-
-def extract_meta_data(rdf_graph):
-    global dataset, triplestore, ID, no_clients, format
-    r = rdf_graph.query(
-        "SELECT DISTINCT ?starttime WHERE {[] <http://www.w3.org/2000/01/rdf-schema#startDate> ?starttime.}")
-    starttime = dateutil.parser.parse(next(iter(r))["starttime"])
-
-    r = rdf_graph.query(
-        "SELECT DISTINCT ?runtime WHERE {[] <http://iguana-benchmark.eu/properties/timeLimit> ?runtime.}")
-    runtime = next(iter(r))["runtime"]
-
-    r = rdf_graph.query("SELECT DISTINCT ?dataset WHERE {[] <http://iguana-benchmark.eu/properties/dataset> ?ds. "
-                        "?ds <http://www.w3.org/2000/01/rdf-schema#label> ?dataset }")
-    dataset = str(next(iter(r))["dataset"])
-    r = rdf_graph.query(
-        "SELECT DISTINCT ?triplestore WHERE {[] <http://iguana-benchmark.eu/properties/connection>  ?ts. "
-        "?ts <http://www.w3.org/2000/01/rdf-schema#label> ?triplestore }")
-    triplestore = str(next(iter(r))["triplestore"])
-    r = rdf_graph.query("SELECT DISTINCT ?task ?clients WHERE {[] <http://iguana-benchmark.eu/properties/task> ?task. "
-                        "?task <http://iguana-benchmark.eu/properties/noOfWorkers> ?clients }")
-    task_clients = next(iter(r))
-    split = str(task_clients["task"]).split("/")
-    ID = "{}/{}/{}".format(split[-3], split[-2], split[-1])
-    no_clients = task_clients["clients"]
-    if rdf_graph.query(
-            'ASK {?x <http://iguana-benchmark.eu/properties/workerType> "SPARQLWorker" }'):
-        format = "HTTP"
-    else:
-        format = "CLI"
-    return ID, format, dataset, no_clients, triplestore, starttime, runtime
+class TaskMetaData:
+    def __init__(self, benchmarkID: str, format: str, dataset: str, noclients: int, triplestore: str, starttime: str,
+                 runtime: int):
+        self.benchmarkID = str(benchmarkID)
+        self.format = str(format)
+        self.dataset = str(dataset)
+        self.noclients = int(noclients)
+        self.triplestore = str(triplestore)
+        self.starttime = dateutil.parser.parse(starttime)
+        self.runtime = int(runtime)
 
 
-def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> str:
+def extract_meta_data(rdf_graph) -> List[TaskMetaData]:
+    raw_tasks = list(rdf_graph.query(
+        ''' PREFIX iguanac: <http://iguana-benchmark.eu/class/>
+            PREFIX iguana: <http://iguana-benchmark.eu/properties/>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            SELECT DISTINCT ?benchmarkID ?format ?dataset ?noclients ?triplestore ?starttime ?runtime WHERE
+            {
+            ?benchmarkID rdfs:Class iguanac:Task .
+            ?benchmarkID rdfs:startDate ?starttime .
+            ?benchmarkID iguana:timeLimit ?runtime.
+            # experiment
+            ?experiment iguana:task ?benchmarkID .
+            ?experiment iguana:dataset ?ds.
+            ?ds rdfs:label ?dataset.
+            # triplestore label
+            ?benchmarkID iguana:connection ?conn .
+            ?conn rdfs:label ?triplestore.
+            # clients
+            ?benchmarkID iguana:noOfWorkers ?noclients .
+            # worker results
+            ?benchmarkID iguana:workerResult ?wr .
+            ?wr iguana:workerType ?workerType .
+            BIND( IF(CONTAINS(?workerType, "CLI"),"CLI","HTTP") AS ?format )
+            } '''
+    ))
+    return [TaskMetaData(**raw_task.asdict()) for raw_task in raw_tasks]
+
+
+def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> Iterator[str]:
     """
     Converts a input file
     :param rdf_file: the IGUANA output file to be processed
@@ -61,77 +59,93 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> str:
     """
 
     # load the file
-    data = rdf.Graph()
-    data.parse(os.path.join(input_dir, rdf_file), format="nt")
+    iguana_result_graph = rdf.Graph()
+    iguana_result_graph.parse(os.path.join(input_dir, rdf_file), format="nt")
 
-    ID, format, dataset, no_clients, triplestore, starttime, runtime = extract_meta_data(data)
+    tasks_meta_data: List[TaskMetaData] = extract_meta_data(iguana_result_graph)
 
-    benchmark_logs = data.query(
-        "SELECT ?query ?queryID ?qps ?succeeded ?failed ?wrongCodes ?unknownExceptions ?timeouts ?totaltime ?resultsize "
-        "WHERE {"
-        "?query <http://iguana-benchmark.eu/properties/queriesPerSecond> ?qps ."
-        "?query <http://iguana-benchmark.eu/properties/queryID> ?queryRes . "
-        "?queryRes <http://www.w3.org/2000/01/rdf-schema#ID> ?queryID . "
-        "?query <http://iguana-benchmark.eu/properties/failed> ?failed ."
-        "?query <http://iguana-benchmark.eu/properties/wrongCodes> ?wrongCodes ."
-        "?query <http://iguana-benchmark.eu/properties/unknownExceptions> ?unknownExceptions ."
-        "?query <http://iguana-benchmark.eu/properties/succeeded> ?succeeded ."
-        "?query <http://iguana-benchmark.eu/properties/timeouts> ?timeouts ."
-        "?query <http://iguana-benchmark.eu/properties/totalTime> ?totaltime ."
-        "?query <http://iguana-benchmark.eu/properties/resultSize> ?resultsize ."
-        "}")
+    for task_meta_data in tasks_meta_data:
 
-    outputfile = "{}_{}_{:02d}-clients_{}_{}".format(format, dataset, int(no_clients), triplestore,
-                                                     starttime.strftime("%Y-%m-%d_%H-%M-%S"))
-    os.makedirs(output_dir, exist_ok=True)
 
-    with open(os.path.join(output_dir, outputfile + ".json"), "w") as jsonfile:
-        jsonfile.write(json.dumps({'benchmarkID': ID,
-                                   'starttime': str(starttime),
-                                   'runtime': runtime,
-                                   "format": format,
-                                   'dataset': dataset,
-                                   'noclients': no_clients,
-                                   'triplestore': triplestore},
-                                  sort_keys=True,
-                                  indent=4),
-                       )
+        query_results = iguana_result_graph.query(
+            ''' PREFIX iguanac: <http://iguana-benchmark.eu/class/>
+                PREFIX iguana: <http://iguana-benchmark.eu/properties/>
+                PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+                SELECT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?queryID ?qps ?succeeded ?failed ?timeouts ?unknownExceptions ?wrongCodes ?totaltime ?resultsize WHERE
+                {{
+                BIND( {benchmarkID} AS ?benchmarkID )
+                {benchmarkID} rdfs:Class iguanac:Task .
+                {benchmarkID} rdfs:startDate ?starttime .
+                # experiment
+                ?experiment iguana:task {benchmarkID} .
+                ?experiment iguana:dataset ?ds.
+                ?ds rdfs:label ?dataset.
+                # triplestore label
+                {benchmarkID} iguana:connection ?conn .
+                ?conn rdfs:label ?triplestore.
+                # clients
+                {benchmarkID} iguana:noOfWorkers ?noclients .
+                # worker results
+                {benchmarkID} iguana:workerResult ?wr .
+                ?wr iguana:queryID ?queryIDURI.
+                ?queryIDURI rdfs:ID ?queryID .
+                ?wr iguana:queriesPerSecond ?qps.
+                ?wr iguana:succeeded ?succeeded.
+                ?wr iguana:failed ?failed.
+                ?wr iguana:timeouts ?timeouts.
+                ?wr iguana:unknownExceptions ?unknownExceptions.
+                ?wr iguana:wrongCodes ?wrongCodes.
+                ?wr iguana:totalTime ?totaltime.
+                ?wr iguana:resultSize ?resultsize.
+                BIND( "{bindformat}" AS ?format )
+                }} '''.format(benchmarkID="<{}>".format(task_meta_data.benchmarkID), bindformat=task_meta_data.format)
+        )
 
-    output_csv = os.path.join(output_dir, outputfile + ".csv")
-    with open(output_csv, 'w') as csvfile:
-        csvwriter = csv.DictWriter(csvfile,
-                                   fieldnames=fieldnames)
-        csvwriter.writeheader()
-        for binding in benchmark_logs:
-            # TODO: make penalty time configurable
-            penalty_time = 180000
+        outputfile: str = "{}_{}_{:02d}-clients_{}_{}".format(task_meta_data.format, task_meta_data.dataset, int(task_meta_data.noclients), task_meta_data.triplestore,
+                                                         task_meta_data.starttime.strftime("%Y-%m-%d_%H-%M-%S"))
+        os.makedirs(output_dir, exist_ok=True)
 
-            total_time = int(binding["totaltime"])
-            failed = int(binding["failed"])
-            timeouts = int(binding["timeouts"])
-            wrongCodes = int(binding["wrongCodes"])
-            unknownExceptions = int(binding["unknownExceptions"])
+        with open(os.path.join(output_dir, outputfile + ".json"), "w") as jsonfile:
+            jsonfile.write(json.dumps({'benchmarkID': task_meta_data.benchmarkID,
+                                       'starttime': str(task_meta_data.starttime),
+                                       'runtime': task_meta_data.runtime,
+                                       "format": task_meta_data.format,
+                                       'dataset': task_meta_data.dataset,
+                                       'noclients': task_meta_data.noclients,
+                                       'triplestore': task_meta_data.triplestore},
+                                      sort_keys=True,
+                                      indent=4),
+                           )
 
-            penalized_time = total_time
-            if failed > 0 and total_time < penalty_time * failed:
-                penalized_time = penalized_time + penalty_time * failed
+        output_csv = os.path.join(output_dir, outputfile + ".csv")
+        with open(output_csv, 'w') as csvfile:
+            csvwriter = csv.DictWriter(csvfile,
+                                       fieldnames=fieldnames)
+            csvwriter.writeheader()
+            for binding in query_results:
+                # TODO: make penalty time configurable
+                penalty_time = 180000
 
-            csvwriter.writerow({
-                "starttime": starttime,
-                "benchmarkID": ID,
-                "format": format,
-                "dataset": dataset,
-                "triplestore": triplestore,
-                "noclients": no_clients,
-                "queryID": binding["queryID"],
-                "qps": binding["qps"],
-                "succeeded": int(binding["succeeded"]),
-                "failed": failed,
-                "wrongCodes": wrongCodes,
-                "unknownExceptions": unknownExceptions,
-                "timeouts": timeouts,
-                "totaltime": total_time,
-                "resultsize": int(binding["resultsize"]) if str(binding["resultsize"]) != '?' else '',
-                "penalizedtime": penalized_time
-            })
-    return os.path.join(output_dir, outputfile)
+                penalized_time = int(binding.totaltime)
+                if int(binding.failed) > 0 and int(binding.totaltime) < penalty_time * int(binding.failed):
+                    penalized_time = penalized_time + penalty_time * int(binding.failed)
+
+                csvwriter.writerow({
+                    "starttime": binding.starttime,
+                    "benchmarkID": binding.benchmarkID,
+                    "format": binding.format,
+                    "dataset": binding.dataset,
+                    "triplestore": binding.triplestore,
+                    "noclients": int(binding.noclients),
+                    "queryID": binding.queryID,
+                    "qps": binding.qps,
+                    "succeeded": int(binding.succeeded),
+                    "failed": int(binding.failed),
+                    "wrongCodes": int(binding.wrongCodes),
+                    "unknownExceptions": int(binding.unknownExceptions),
+                    "timeouts": int(binding.timeouts),
+                    "totaltime": int(binding.totaltime),
+                    "resultsize": int(binding["resultsize"]) if str(binding["resultsize"]) != '?' else '',
+                    "penalizedtime": penalized_time
+                })
+        yield os.path.join(output_dir, outputfile)

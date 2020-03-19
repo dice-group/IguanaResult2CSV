@@ -2,6 +2,7 @@ import csv
 import json
 import os
 from pathlib import Path
+from typing import List
 
 import click
 
@@ -24,9 +25,9 @@ def run(output_dir, input_dir):
     output_files = list()
     click.echo("\nConverted files:")
     for file in files:
-        output_file = result2rdf.convert_result_file(file.name, input_dir, output_dir)
-        click.echo("{}.csv".format(Path(output_file).name))
-        output_files.append(output_file)
+        for output_file in result2rdf.convert_result_file(file.name, input_dir, output_dir):
+            click.echo("{}.csv".format(Path(output_file).name))
+            output_files.append(output_file)
 
     click.echo("\nConcatenating all output files ... ")
     concat_output_file_path = os.path.join(output_dir, "all_results")
