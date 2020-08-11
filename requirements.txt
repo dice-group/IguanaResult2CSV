@@ -1,3 +1,4 @@
 rdflib
 python-dateutil
 click
+requests
