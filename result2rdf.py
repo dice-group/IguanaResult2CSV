@@ -6,7 +6,7 @@ from typing import List, Iterator
 import dateutil.parser
 import rdflib as rdf
 
-fieldnames = ["starttime", "benchmarkID", "format", "dataset", "triplestore", "noclients", "queryID", "qps",
+fieldnames = ["starttime", "benchmarkID", "format", "dataset", "triplestore", "noclients", "queryID", "qps", "penalizedQps",
               "succeeded", "failed", "timeouts", "unknownExceptions", "wrongCodes", "totaltime", "resultsize",
               "penalizedtime"]
 
@@ -28,9 +28,10 @@ def extract_meta_data(rdf_graph) -> List[TaskMetaData]:
         ''' PREFIX iguanac: <http://iguana-benchmark.eu/class/>
             PREFIX iguana: <http://iguana-benchmark.eu/properties/>
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
             SELECT DISTINCT ?benchmarkID ?format ?dataset ?noclients ?triplestore ?starttime ?runtime WHERE
             {
-            ?benchmarkID rdfs:Class iguanac:Task .
+            ?benchmarkID rdf:type iguanac:Task .
             ?benchmarkID rdfs:startDate ?starttime .
             ?benchmarkID iguana:timeLimit ?runtime.
             # experiment
@@ -70,10 +71,11 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> Itera
             ''' PREFIX iguanac: <http://iguana-benchmark.eu/class/>
                 PREFIX iguana: <http://iguana-benchmark.eu/properties/>
                 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-                SELECT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?queryID ?qps ?succeeded ?failed ?timeouts ?unknownExceptions ?wrongCodes ?totaltime ?resultsize WHERE
+                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                SELECT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?queryID ?qps ?penalizedQPS ?succeeded ?failed ?timeouts ?unknownExceptions ?wrongCodes ?totaltime ?resultsize WHERE
                 {{
                 BIND( {benchmarkID} AS ?benchmarkID )
-                {benchmarkID} rdfs:Class iguanac:Task .
+                {benchmarkID} rdf:type iguanac:Task .
                 {benchmarkID} rdfs:startDate ?starttime .
                 # experiment
                 ?experiment iguana:task {benchmarkID} .
@@ -86,16 +88,17 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> Itera
                 {benchmarkID} iguana:noOfWorkers ?noclients .
                 # worker results
                 {benchmarkID} iguana:workerResult ?wr .
-                ?wr iguana:queryID ?queryIDURI.
-                ?queryIDURI rdfs:ID ?queryID .
-                ?wr iguana:queriesPerSecond ?qps.
-                ?wr iguana:succeeded ?succeeded.
-                ?wr iguana:failed ?failed.
-                ?wr iguana:timeouts ?timeouts.
-                ?wr iguana:unknownExceptions ?unknownExceptions.
-                ?wr iguana:wrongCodes ?wrongCodes.
-                ?wr iguana:totalTime ?totaltime.
-                ?wr iguana:resultSize ?resultsize.
+                ?wr iguana:query ?queryIDURI.
+                ?queryIDURI iguana:queryID ?queryID .
+                ?queryIDURI iguana:QPS ?qps.
+                ?queryIDURI iguana:penalizedQPS ?penalizedQPS.
+                ?queryIDURI iguana:succeeded ?succeeded.
+                ?queryIDURI iguana:failed ?failed.
+                ?queryIDURI iguana:timeOuts ?timeouts.
+                ?queryIDURI iguana:unknownException ?unknownExceptions.
+                ?queryIDURI iguana:wrongCodes ?wrongCodes.
+                ?queryIDURI iguana:totalTime ?totaltime.
+                ?queryIDURI iguana:resultSize ?resultsize.
                 BIND( "{bindformat}" AS ?format )
                 }} '''.format(benchmarkID="<{}>".format(task_meta_data.benchmarkID), bindformat=task_meta_data.format)
         )
@@ -122,7 +125,7 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> Itera
             csvwriter = csv.DictWriter(csvfile,
                                        fieldnames=fieldnames)
             csvwriter.writeheader()
-            for binding in sorted(list(query_results), key=lambda x: int(x.queryID)):
+            for binding in sorted(list(query_results), key=lambda x: x.queryID):
                 # TODO: make penalty time configurable
                 penalty_time = 180000
 
@@ -139,6 +142,7 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> Itera
                     "noclients": int(binding.noclients),
                     "queryID": binding.queryID,
                     "qps": binding.qps,
+                    "penalizedQps": binding.penalizedQPS,
                     "succeeded": int(binding.succeeded),
                     "failed": int(binding.failed),
                     "wrongCodes": int(binding.wrongCodes),
