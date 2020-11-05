@@ -37,7 +37,8 @@ def visualize(json_path: str, csv_path: str):
 
     for [dataset, noclients, mode] in itertools.product(datasets, numbersofclients, modes):
 
-        output_file(os.path.join(base_dir, '{}_{}_{:02d}-clients.html'.format(mode, dataset, noclients)))
+        output_file(os.path.join(base_dir, '{}_{}_{:02d}-clients.html'.format(mode, dataset, noclients)),
+                    title='{}_{}_{:02d}-clients'.format(mode, dataset, noclients))
         aggreagting_metrics = []
         for metric in ["PenalizedAvgQPS", "QMPH"]:
             x_y_map = {run["triplestore"]: run[metric]

@@ -52,6 +52,8 @@ def run(output_dir, input_dir):
                                      sort_keys=True,
                                      indent=4
                                      ))
+    click.echo("Done\n")
+    click.echo("Generating plots ...")
     visualize(os.path.join(output_dir, "all_results.json"), os.path.join(output_dir, "all_results.csv"))
     click.echo("Done")
 
