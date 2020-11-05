@@ -124,7 +124,8 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> Itera
         output_csv = os.path.join(output_dir, outputfile + ".csv")
         with open(output_csv, 'w') as csvfile:
             csvwriter = csv.DictWriter(csvfile,
-                                       fieldnames=fieldnames)
+                                       fieldnames=fieldnames,
+                                       quoting=csv.QUOTE_NONNUMERIC)
             csvwriter.writeheader()
             for binding in sorted(list(query_results), key=lambda x: x.queryID):
                 # TODO: make penalty time configurable
