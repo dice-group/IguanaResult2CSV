@@ -6,6 +6,8 @@ from typing import List
 
 import click
 
+from visualize import visualize
+
 
 @click.command()
 @click.argument('output_dir', type=click.Path(), default=lambda: os.getcwd())
@@ -50,6 +52,7 @@ def run(output_dir, input_dir):
                                      sort_keys=True,
                                      indent=4
                                      ))
+    visualize(os.path.join(output_dir, "all_results.json"), os.path.join(output_dir, "all_results.csv"))
     click.echo("Done")
 
 
