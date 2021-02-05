@@ -1,6 +1,8 @@
 import csv
 import json
 import os
+from pathlib import Path
+from string import Template
 from typing import List, Iterator
 
 import dateutil.parser
@@ -11,6 +13,11 @@ fieldnames = ["starttime", "benchmarkID", "format", "dataset", "triplestore", "n
               "succeeded", "failed", "timeouts", "unknownExceptions", "wrongCodes", "totaltime", "resultsize",
               "penalizedtime"]
 
+with open('sparql/get_tasks.sparql', 'r') as file:
+    get_experiments_sparql = file.read()
+
+with open('sparql/task_meta_data.sparql', 'r') as file:
+    task_meta_data_template = file.read()
 
 class TaskMetaData:
     def __init__(self, benchmarkID: str, format: str, dataset: str, noclients: int, triplestore: str, starttime: str,
@@ -62,8 +69,21 @@ def extract_meta_data(rdf_graph) -> List[TaskMetaData]:
     ))
     return [TaskMetaData(**raw_task.asdict()) for raw_task in raw_tasks]
 
+def extract_tasks(rdf_graph) -> List[rdf.URIRef]:
+    query_result = list(rdf_graph.query(get_experiments_sparql
+    ))
+    return [result["task"] for result in query_result]
 
-def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> Iterator[str]:
+
+def extract_task_meta_data(rdf_graph, task: rdf.URIRef):
+    query_result = list(
+        rdf_graph.query(
+            Template(task_meta_data_template).substitute(task=task.n3())
+    ))
+    assert len(query_result) == 1
+    return query_result[0].asdict()
+
+def convert_result_file(rdf_file: Path, input_dir: Path, output_dir: Path) -> Iterator[str]:
     """
     Converts a input file
     :param rdf_file: the IGUANA output file to be processed
@@ -72,7 +92,17 @@ def convert_result_file(rdf_file: str, input_dir: str, output_dir: str) -> Itera
 
     # load the file
     iguana_result_graph = rdf.Graph()
-    iguana_result_graph.parse(os.path.join(input_dir, rdf_file), format="nt")
+    iguana_result_graph.parse(str(rdf_file), format="ttl")
+
+    tasks = extract_tasks(iguana_result_graph)
+
+    for task in tasks:
+        task_meta_data = extract_task_meta_data(iguana_result_graph, task)
+        # todo: go on here
+        pass
+
+
+
 
     tasks_meta_data: List[TaskMetaData] = extract_meta_data(iguana_result_graph)
 

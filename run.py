@@ -17,17 +17,12 @@ def run(output_dir, input_dir):
     click.echo("input directory: {}".format(input_dir))
 
     # find files that are Iguana result files
-    files = list(filter(
-        lambda path: path.is_file() and
-                     path.suffix == ".nt" and
-                     not path.name.startswith("cleaned_"),
-        [Path(os.path.join(input_dir, path)) for path in os.listdir(input_dir)]
-    ))
+    files = [file for file in Path(input_dir).iterdir() if file.suffix in {".nt", ".ttl"}]
     click.echo("\nFiles for conversion: \n{}".format("\n".join([file.name for file in files])))
     output_files = list()
     click.echo("\nConverted files:")
     for file in files:
-        for output_file in result2rdf.convert_result_file(file.name, input_dir, output_dir):
+        for output_file in result2rdf.convert_result_file(file, input_dir, output_dir):
             click.echo("{}.csv".format(Path(output_file).name))
             output_files.append(output_file)
 
