@@ -1,0 +1,48 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX imetric: <http://iguana-benchmark.eu/class/metric/>
+PREFIX iprop: <http://iguana-benchmark.eu/properties/>
+PREFIX iont: <http://iguana-benchmark.eu/class/>
+PREFIX ires: <http://iguana-benchmark.eu/resource/>
+PREFIX lsqr: <http://lsq.aksw.org/res/>
+
+
+SELECT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?clientID ?queryID ?qps ?penalizedQPS ?succeeded ?failed
+    ?timeouts ?unknownExceptions ?wrongCodes ?totaltime ?resultsize WHERE {
+    {
+        BIND($task AS ?benchmarkID)
+        $task rdf:type iont:Task .
+        $task rdfs:startDate ?starttime .
+        # experiment
+        ?experiment iprop:task $task .
+        ?experiment iprop:dataset ?ds .
+        ?ds rdfs:label ?dataset .
+
+        # triplestore label
+        $task iprop:connection ?conn .
+        ?conn rdfs:label ?triplestore .
+        # clients
+        $task iprop:noOfWorkers ?noclients .
+        # worker results
+        $task iprop:workerResult ?wr .
+        ?wr iprop:workerType ?workerType .
+        BIND(IF(CONTAINS(?workerType, "CLI"),"CLI","HTTP") AS ?format)
+
+        ?wr  iprop:workerID ?clientID .
+
+        ?wr iprop:query ?queryIDURI .
+
+        OPTIONAL { ?queryIDURI iprop:queryID / rdfs:ID ?queryID . }
+        OPTIONAL { ?queryIDURI iprop:QPS ?qps . }
+        OPTIONAL { ?queryIDURI iprop:penalizedQPS ?penalizedQPS . }
+        OPTIONAL { ?queryIDURI iprop:succeeded ?succeeded . }
+        OPTIONAL { ?queryIDURI iprop:failed ?failed . }
+        OPTIONAL { ?queryIDURI iprop:timeOuts ?timeouts . }
+        OPTIONAL { ?queryIDURI iprop:unknownException ?unknownExceptions . }
+        OPTIONAL { ?queryIDURI iprop:wrongCodes ?wrongCodes . }
+        OPTIONAL { ?queryIDURI iprop:totalTime ?totaltime . }
+        OPTIONAL { ?queryIDURI iprop:resultSize ?resultsize . }
+    }
+}
