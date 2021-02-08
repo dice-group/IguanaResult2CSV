@@ -45,4 +45,4 @@ SELECT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?clientI
         OPTIONAL { ?queryIDURI iprop:totalTime ?totaltime . }
         OPTIONAL { ?queryIDURI iprop:resultSize ?resultsize . }
     }
-}
+} ORDER BY xsd:integer(?queryID) ?clientID
