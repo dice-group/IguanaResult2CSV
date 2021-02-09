@@ -22,13 +22,17 @@ def cli(output_dir, input_dir):
     click.echo("\nFiles for conversion: \n{}".format("\n".join([file.name for file in files])))
     output_csvs = list()
     output_jsons = list()
+    output_each_query_csvs = list()
     click.echo("\nConverted files:")
     for file in files:
         for output_files in convert_result_file(file, output_dir):
-            click.echo("{}.csv".format(output_files[0].name))
+            click.echo("{}".format(output_files[0].name))
             output_csvs.append(output_files[0])
-            click.echo("{}.json".format(output_files[1].name))
+            click.echo("{}".format(output_files[1].name))
             output_jsons.append(output_files[1])
+            if (output_files[1] is not None):
+                click.echo("{}".format(output_files[2].name))
+                output_each_query_csvs.append(output_files[2])
 
     click.echo("\nConcatenating all output files ... ")
     concatenated_csv_path = output_dir.joinpath("all_results.csv")
@@ -57,6 +61,21 @@ def cli(output_dir, input_dir):
                                            sort_keys=True,
                                            indent=4
                                            ))
+
+    concatenated_csv_eq_path = output_dir.joinpath("all_results_each_query.csv")
+
+    with open(concatenated_csv_eq_path, 'w') as concatenated_eq_csv:
+        csv_writer = None
+
+        for output_eq_csv in output_each_query_csvs:
+            with open(output_eq_csv, 'r') as input_file:
+                csv_reader = csv.DictReader(input_file, )
+                if csv_writer is None:
+                    csv_writer = csv.DictWriter(concatenated_eq_csv, fieldnames=csv_reader.fieldnames,
+                                                quoting=csv.QUOTE_NONNUMERIC)
+                    csv_writer.writeheader()
+                for row in csv_reader:
+                    csv_writer.writerow(row)
     click.echo("Done\n")
     click.echo("Generating plots ...")
     click.echo("Done")

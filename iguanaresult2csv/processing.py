@@ -23,6 +23,9 @@ with open(sparql_folder.joinpath('task_meta_data.sparql'), 'r') as file:
 with open(sparql_folder.joinpath('task_data.sparql'), 'r') as file:
     task_data_template = file.read()
 
+with open(sparql_folder.joinpath('task_data_each_query.sparql'), 'r') as file:
+    task_data_each_query_template = file.read()
+
 
 def extract_tasks(rdf_graph) -> List[rdf.URIRef]:
     query_result = list(rdf_graph.query(get_experiments_sparql
@@ -41,6 +44,14 @@ def extract_task_meta_data(rdf_graph, task: rdf.URIRef) -> ResultRow:
 def extract_task_data(rdf_graph, task: rdf.URIRef):
     query_result = rdf_graph.query(
         Template(task_data_template).substitute(task=task.n3())
+    )
+    assert len(query_result) > 0
+    return query_result
+
+
+def extractuery_task_data_each_query(rdf_graph, task: rdf.URIRef):
+    query_result = rdf_graph.query(
+        Template(task_data_each_query_template).substitute(task=task.n3())
     )
     assert len(query_result) > 0
     return query_result
@@ -76,7 +87,7 @@ def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[str]:
         task_meta_data.PenalizedAvgQPS = 0
 
         output_csv = output_dir.joinpath(output_filename + ".csv")
-        fieldnames = query_results.vars + ["penalized_time"]
+        fieldnames = query_results.vars + ["penalizedTime"]
         with open(output_csv, 'w') as csvfile:
             csvwriter = csv.DictWriter(csvfile,
                                        fieldnames=fieldnames,
@@ -97,10 +108,24 @@ def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[str]:
         task_meta_data.PenalizedAvgQPS = task_meta_data.PenalizedAvgQPS / len(
             query_results) if task_meta_data.PenalizedAvgQPS > 0 else 0
 
+        output_csv_eq = None
+        if task_meta_data.EachQuery.toPython():
+            query_results_eq = extractuery_task_data_each_query(iguana_result_graph, task)
+            fieldnames_eq = query_results_eq.vars
+            output_csv_eq = output_dir.joinpath(output_filename + "_each_query.csv")
+            with open(output_csv_eq, 'w') as csvfile_eq:
+                csvwriter = csv.DictWriter(csvfile_eq,
+                                           fieldnames=fieldnames_eq,
+                                           quoting=csv.QUOTE_NONNUMERIC)
+                csvwriter.writeheader()
+                for result_row in query_results_eq:
+                    csv_row = dict(zip(fieldnames_eq, [entry.toPython() for entry in result_row]))
+                    csvwriter.writerow(csv_row)
+
         output_json = output_dir.joinpath(output_filename + ".json")
         with open(output_json, "w") as jsonfile:
             jsonfile.write(json.dumps(task_meta_data.asdict(),
                                       sort_keys=True,
                                       indent=4),
                            )
-        yield (output_csv, output_json)
+        yield output_csv, output_json, output_csv_eq
