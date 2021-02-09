@@ -2,18 +2,16 @@ import csv
 import json
 import os
 from pathlib import Path
-from typing import List
 
 import click
 
-
-# from visualize import visualize
+from iguanaresult2csv.processing import convert_result_file
 
 
 @click.command()
 @click.argument('output_dir', type=click.Path(), default=lambda: os.getcwd())
 @click.argument('input_dir', type=click.Path(exists=True), default=lambda: os.getcwd())
-def run(output_dir, input_dir):
+def cli(output_dir, input_dir):
     output_dir = Path(output_dir)
     input_dir = Path(input_dir)
     click.echo("output directory: {}".format(output_dir))
@@ -26,7 +24,7 @@ def run(output_dir, input_dir):
     output_jsons = list()
     click.echo("\nConverted files:")
     for file in files:
-        for output_files in result2rdf.convert_result_file(file, output_dir):
+        for output_files in convert_result_file(file, output_dir):
             click.echo("{}.csv".format(output_files[0].name))
             output_csvs.append(output_files[0])
             click.echo("{}.json".format(output_files[1].name))
@@ -56,16 +54,13 @@ def run(output_dir, input_dir):
                 json_obj = json.load(input_file)
                 entries.append(json_obj)
         concatenated_json.write(json.dumps({"benchmarks": entries},
-                                     sort_keys=True,
-                                     indent=4
-                                     ))
+                                           sort_keys=True,
+                                           indent=4
+                                           ))
     click.echo("Done\n")
     click.echo("Generating plots ...")
-    # visualize(os.path.join(output_dir, "all_results.json"), os.path.join(output_dir, "all_results.csv"))
     click.echo("Done")
 
 
-import result2rdf
-
 if __name__ == '__main__':
-    run()
+    cli()

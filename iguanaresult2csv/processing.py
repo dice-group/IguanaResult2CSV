@@ -1,21 +1,26 @@
 import csv
 import json
 import os
+import pkg_resources
+
 from pathlib import Path
 from string import Template
 from typing import List, Iterator
 
+import rdflib as rdf
 from rdflib.query import ResultRow
 
-import rdflib as rdf
+sparql_folder = Path(pkg_resources.resource_filename('iguanaresult2csv', 'sparql/'))
 
-with open('sparql/get_tasks.sparql', 'r') as file:
+print("sparql folder mod: {}".format(sparql_folder))
+
+with open(sparql_folder.joinpath('get_tasks.sparql'), 'r') as file:
     get_experiments_sparql = file.read()
 
-with open('sparql/task_meta_data.sparql', 'r') as file:
+with open(sparql_folder.joinpath('task_meta_data.sparql'), 'r') as file:
     task_meta_data_template = file.read()
 
-with open('sparql/task_data.sparql', 'r') as file:
+with open(sparql_folder.joinpath('task_data.sparql'), 'r') as file:
     task_data_template = file.read()
 
 
@@ -60,12 +65,12 @@ def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[str]:
         query_results = extract_task_data(iguana_result_graph, task)
 
         output_filename: str = "{}_{}_{:02d}-clients_{}_{}".format(task_meta_data.format.toPython(),
-                                                              task_meta_data.dataset.toPython(),
-                                                              int(task_meta_data.noclients.toPython()),
-                                                              # flaw in iguana result file
-                                                              task_meta_data.triplestore.toPython(),
-                                                              task_meta_data.startDate.toPython().strftime(
-                                                                  "%Y-%m-%d_%H-%M-%S"))
+                                                                   task_meta_data.dataset.toPython(),
+                                                                   int(task_meta_data.noclients.toPython()),
+                                                                   # flaw in iguana result file
+                                                                   task_meta_data.triplestore.toPython(),
+                                                                   task_meta_data.startDate.toPython().strftime(
+                                                                       "%Y-%m-%d_%H-%M-%S"))
         os.makedirs(output_dir, exist_ok=True)
 
         task_meta_data.PenalizedAvgQPS = 0
