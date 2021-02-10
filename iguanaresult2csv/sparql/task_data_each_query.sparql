@@ -11,7 +11,7 @@ PREFIX lsqr: <http://lsq.aksw.org/res/>
 
 SELECT DISTINCT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?clientID ?queryID ?run ?qps
     ?penalizedQPS ?succeeded
-    ?failed ?timeouts ?unknownExceptions ?wrongCodes ?time ?resultsize ?penalizedTime WHERE {
+    ?failed ?timeouts ?unknownExceptions ?wrongCodes ?time ?contentLength ?penalizedTime WHERE {
     {
         BIND($task AS ?benchmarkID)
         $task rdf:type iont:Task .
@@ -43,7 +43,7 @@ SELECT DISTINCT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients
         ?queryExecution
             iprop:code ?code ;
             iprop:run ?run ;
-            iprop:resultSize ?resultsize ;
+            iprop:resultSize ?contentLength ;
             iprop:success ?success ;
             iprop:time ?time .
 

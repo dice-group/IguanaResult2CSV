@@ -10,7 +10,7 @@ PREFIX lsqr: <http://lsq.aksw.org/res/>
 
 
 SELECT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?clientID ?queryID ?qps ?penalizedQPS ?succeeded ?failed
-    ?timeouts ?unknownExceptions ?wrongCodes ?totaltime ?resultsize WHERE {
+    ?timeouts ?unknownExceptions ?wrongCodes ?totaltime ?contentLength WHERE {
     {
         BIND($task AS ?benchmarkID)
         $task rdf:type iont:Task .
@@ -43,6 +43,6 @@ SELECT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?clientI
         OPTIONAL { ?queryIDURI iprop:unknownException ?unknownExceptions . }
         OPTIONAL { ?queryIDURI iprop:wrongCodes ?wrongCodes . }
         OPTIONAL { ?queryIDURI iprop:totalTime ?totaltime . }
-        OPTIONAL { ?queryIDURI iprop:resultSize ?resultsize . }
+        OPTIONAL { ?queryIDURI iprop:resultSize ?contentLength . }
     }
 } ORDER BY xsd:integer(?queryID) ?clientID
