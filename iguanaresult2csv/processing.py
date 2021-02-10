@@ -49,7 +49,7 @@ def extract_task_data(rdf_graph: Graph, task: URIRef) -> sparql.Result:
     return query_result
 
 
-def extractuery_task_data_each_query(rdf_graph, task: URIRef) -> sparql.Result:
+def extract_task_data_each_query(rdf_graph, task: URIRef) -> sparql.Result:
     query_result: sparql.Result = rdf_graph.query(
         Template(task_data_each_query_template).substitute(task=task.n3())
     )
@@ -69,26 +69,29 @@ def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[Tuple[Path
     iguana_result_graph: Graph = Graph()
     iguana_result_graph.parse(str(rdf_file), format="ttl")
 
-    tasks = extract_tasks(iguana_result_graph)
+    tasks: List[URIRef] = extract_tasks(iguana_result_graph)
 
     for task in tasks:
-        task_meta_data = extract_task_meta_data(iguana_result_graph, task)
+        task_meta_data: sparql.ResultRow = extract_task_meta_data(iguana_result_graph, task)
 
-        query_results = extract_task_data(iguana_result_graph, task)
+        query_results: sparql.Result = extract_task_data(iguana_result_graph, task)
 
-        output_filename: str = "{}_{}_{:02d}-clients_{}_{}".format(task_meta_data.format.toPython(),
-                                                                   task_meta_data.dataset.toPython(),
-                                                                   int(task_meta_data.noclients.toPython()),
-                                                                   # flaw in iguana result file
-                                                                   task_meta_data.triplestore.toPython(),
-                                                                   task_meta_data.startDate.toPython().strftime(
-                                                                       "%Y-%m-%d_%H-%M-%S"))
+        output_filename: str = "{}_{}_{:02d}-clients_{}_{}".format(
+            task_meta_data.format.toPython(),
+            task_meta_data.dataset.toPython(),
+            int(task_meta_data.noclients.toPython()),
+            # flaw in iguana result file
+            task_meta_data.triplestore.toPython(),
+            task_meta_data.startDate.toPython().strftime(
+                "%Y-%m-%d_%H-%M-%S"))
         os.makedirs(output_dir, exist_ok=True)
 
+        # write csv
+        # task's PenalizedAvgQPS is calculated along with writing the csv
         task_meta_data.PenalizedAvgQPS = 0
 
-        output_csv = output_dir.joinpath(output_filename + ".csv")
-        fieldnames = query_results.vars + ["penalizedTime"]
+        output_csv: Path = output_dir.joinpath(output_filename + ".csv")
+        fieldnames: List[str] = query_results.vars + ["penalizedTime"]
         with open(output_csv, 'w') as csvfile:
             csvwriter = csv.DictWriter(csvfile,
                                        fieldnames=fieldnames,
@@ -109,10 +112,18 @@ def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[Tuple[Path
         task_meta_data.PenalizedAvgQPS = task_meta_data.PenalizedAvgQPS / len(
             query_results) if task_meta_data.PenalizedAvgQPS > 0 else 0
 
+        # write json
+        output_json = output_dir.joinpath(output_filename + ".json")
+        with open(output_json, "w") as jsonfile:
+            jsonfile.write(json.dumps(task_meta_data.asdict(),
+                                      sort_keys=True,
+                                      indent=4))
+
+        # write extra CSV with each query stats if EachQuery metric was activated
         output_csv_eq = None
         if task_meta_data.EachQuery.toPython():
-            query_results_eq = extractuery_task_data_each_query(iguana_result_graph, task)
-            fieldnames_eq = query_results_eq.vars
+            query_results_eq: sparql.Result = extract_task_data_each_query(iguana_result_graph, task)
+            fieldnames_eq: List[str] = query_results_eq.vars
             output_csv_eq = output_dir.joinpath(output_filename + "_each_query.csv")
             with open(output_csv_eq, 'w') as csvfile_eq:
                 csvwriter = csv.DictWriter(csvfile_eq,
@@ -123,10 +134,4 @@ def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[Tuple[Path
                     csv_row = dict(zip(fieldnames_eq, [entry.toPython() for entry in result_row]))
                     csvwriter.writerow(csv_row)
 
-        output_json = output_dir.joinpath(output_filename + ".json")
-        with open(output_json, "w") as jsonfile:
-            jsonfile.write(json.dumps(task_meta_data.asdict(),
-                                      sort_keys=True,
-                                      indent=4),
-                           )
         yield output_csv, output_json, output_csv_eq
