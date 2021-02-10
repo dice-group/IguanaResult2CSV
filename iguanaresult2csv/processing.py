@@ -5,10 +5,11 @@ import pkg_resources
 
 from pathlib import Path
 from string import Template
-from typing import List, Iterator
+from typing import List, Iterator, Tuple
 
 import rdflib as rdf
-from rdflib.query import ResultRow
+import rdflib.query as sparql
+from rdflib import Graph, URIRef
 
 sparql_folder = Path(pkg_resources.resource_filename('iguanaresult2csv', 'sparql/'))
 
@@ -27,45 +28,45 @@ with open(sparql_folder.joinpath('task_data_each_query.sparql'), 'r') as file:
     task_data_each_query_template = file.read()
 
 
-def extract_tasks(rdf_graph) -> List[rdf.URIRef]:
-    query_result = list(rdf_graph.query(get_experiments_sparql
-                                        ))
+def extract_tasks(rdf_graph) -> List[URIRef]:
+    query_result = list(rdf_graph.query(get_experiments_sparql))
     return [result["task"] for result in query_result]
 
 
-def extract_task_meta_data(rdf_graph, task: rdf.URIRef) -> ResultRow:
-    query_result = rdf_graph.query(
+def extract_task_meta_data(rdf_graph: Graph, task: URIRef) -> sparql.ResultRow:
+    query_result: sparql.Result = rdf_graph.query(
         Template(task_meta_data_template).substitute(task=task.n3())
     )
     assert len(query_result) == 1
     return next(iter(query_result))
 
 
-def extract_task_data(rdf_graph, task: rdf.URIRef):
-    query_result = rdf_graph.query(
+def extract_task_data(rdf_graph: Graph, task: URIRef) -> sparql.Result:
+    query_result: sparql.Result = rdf_graph.query(
         Template(task_data_template).substitute(task=task.n3())
     )
     assert len(query_result) > 0
     return query_result
 
 
-def extractuery_task_data_each_query(rdf_graph, task: rdf.URIRef):
-    query_result = rdf_graph.query(
+def extractuery_task_data_each_query(rdf_graph, task: URIRef) -> sparql.Result:
+    query_result: sparql.Result = rdf_graph.query(
         Template(task_data_each_query_template).substitute(task=task.n3())
     )
     assert len(query_result) > 0
     return query_result
 
 
-def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[str]:
+def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[Tuple[Path, Path, Path]]:
     """
     Converts a input file
     :param rdf_file: the IGUANA output file to be processed
+    :param output_dir: dir where the files are created/overwritten
     :return: the file where the result was written to
     """
 
     # load the file
-    iguana_result_graph = rdf.Graph()
+    iguana_result_graph: Graph = Graph()
     iguana_result_graph.parse(str(rdf_file), format="ttl")
 
     tasks = extract_tasks(iguana_result_graph)
