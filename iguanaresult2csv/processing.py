@@ -125,12 +125,28 @@ def convert_result_file(rdf_file: Path, output_dir: Path) -> Iterator[Tuple[Path
             query_results_eq: sparql.Result = extract_task_data_each_query(iguana_result_graph, task)
             fieldnames_eq: List[str] = query_results_eq.vars
             output_csv_eq = output_dir.joinpath(output_filename + "_each_query.csv")
+            qm_bug: bool = False
             with open(output_csv_eq, 'w') as csvfile_eq:
                 csvwriter = csv.DictWriter(csvfile_eq,
                                            fieldnames=fieldnames_eq,
                                            quoting=csv.QUOTE_NONNUMERIC)
                 csvwriter.writeheader()
+
                 for result_row in query_results_eq:
+                    # TODO: workaround for IGUANA bug where too many runs are executed for NumberOfQueryMixes mode
+                    if task_meta_data.numberOfQueryMixes.toPython() is not None \
+                            and result_row.run.toPython() > int(task_meta_data.numberOfQueryMixes):
+                        if qm_bug is False:
+                            print(
+                                "WARNING: Runs after numberOfQueryMixes = {} are not reported in the each query output."
+                                " Consequently, aggregated metrics in {} and {} do not apply to {}.".format(
+                                    task_meta_data.numberOfQueryMixes,
+                                    output_csv.name,
+                                    output_json.name,
+                                    output_csv_eq.name
+                                ))
+                            qm_bug = True
+                        continue
                     csv_row = dict(zip(fieldnames_eq, [entry.toPython() for entry in result_row]))
                     csvwriter.writerow(csv_row)
 
