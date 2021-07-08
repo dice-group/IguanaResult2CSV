@@ -15,15 +15,14 @@ setup(
     author='Alexander Bigerl',
     author_email='info@dice-research.org',
     url='https://github.com/dice-group/IguanaResult2CSV',
-    license=license,
+    license="AGPL v3",
     packages=find_packages(),
     include_package_data=True,
     package_data={'iguanaresult2csv': ['sparql/*.sparql']},
     install_requires=[
         "rdflib>=5.0.0",
-        "python-dateutil>=2.8.1",
+        "requests>=2.25.1",  # dependency of rdflib
         "click>=7.1.2",
-        "requests>=2.25.1"
     ],
     entry_points='''
         [console_scripts]
