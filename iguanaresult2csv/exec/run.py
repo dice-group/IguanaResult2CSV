@@ -47,8 +47,6 @@ def cli(output_dir, input_dir):
     combine_csv_files(concatenated_csv_eq_path, output_each_query_csvs)
 
     click.echo("Done\n")
-    click.echo("Generating plots ...")
-    click.echo("Done")
 
 
 def combine_json_files(concatenated_json_path: Path, json_files: List[Path]):
@@ -64,11 +62,11 @@ def combine_json_files(concatenated_json_path: Path, json_files: List[Path]):
                                            ))
 
 
-def combine_csv_files(concatenated_csv_path: Path, json_files: List[Path]):
+def combine_csv_files(concatenated_csv_path: Path, csv_files: List[Path]):
     with open(concatenated_csv_path, 'w') as concatenated_csv:
         csv_writer = None
 
-        for output_csv in json_files:
+        for output_csv in csv_files:
             with open(output_csv, 'r') as input_file:
                 csv_reader = csv.DictReader(input_file, )
                 if csv_writer is None:
