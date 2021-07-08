@@ -1,0 +1,64 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX imetric: <http://iguana-benchmark.eu/class/metric/>
+PREFIX iprop: <http://iguana-benchmark.eu/properties/>
+PREFIX iont: <http://iguana-benchmark.eu/class/>
+PREFIX ires: <http://iguana-benchmark.eu/resource/>
+PREFIX lsqr: <http://lsq.aksw.org/res/>
+
+
+SELECT DISTINCT ?starttime ?benchmarkID ?format ?dataset ?triplestore ?noclients ?clientID ?queryID ?run ?qps
+    ?penalizedQPS ?succeeded
+    ?failed ?timeouts ?unknownExceptions ?wrongCodes ?time ?contentLength ?penalizedTime WHERE {
+    {
+        BIND($task AS ?benchmarkID)
+        $task rdf:type iont:Task .
+        $task rdfs:startDate ?starttime .
+        # experiment
+        ?experiment iprop:task $task .
+        ?experiment iprop:dataset ?ds .
+        ?ds rdfs:label ?dataset .
+
+        # triplestore label
+        $task iprop:connection ?conn .
+        ?conn rdfs:label ?triplestore .
+        # clients
+        $task iprop:noOfWorkers ?noclients .
+        # worker results
+        $task iprop:workerResult ?wr .
+        ?wr iprop:workerType ?workerType .
+
+        BIND(IF(CONTAINS(?workerType, "CLI"),"CLI","HTTP") AS ?format)
+
+        ?wr iprop:workerID ?clientID .
+
+        ?wr iprop:query ?queryIDURI .
+
+        ?queryIDURI iprop:queryID / rdfs:ID ?queryID .
+
+        ?queryIDURI iprop:queryExecution ?queryExecution .
+
+        ?queryExecution
+            iprop:code ?code ;
+            iprop:run ?run ;
+            iprop:resultSize ?contentLength ;
+            iprop:success ?success ;
+            iprop:time ?time .
+
+        BIND(IF(?code=1,1,0) AS ?succeeded)
+        BIND(IF(?code!=1,1,0) AS ?failed)
+
+        BIND(IF(?code=0,1,0) AS ?unknownExceptions)
+        BIND(IF(?code=-1,1,0) AS ?timeouts)
+        BIND(IF(?code=-2,1,0) AS ?wrongCodes)
+        BIND(("1000"^^xsd:double / ?time) AS ?qps)
+        #        # todo: workaround because penalty time is missing in IGUANA result file
+        BIND(IF(?success,?qps,("1"^^xsd:double / "180"^^xsd:double)) AS ?penalizedQPS)
+        BIND(IF(?success,?time,"180000"^^xsd:double) AS ?penalizedTime)
+
+
+    }
+}
+ORDER BY xsd:integer(?queryID) ?clientID ?run

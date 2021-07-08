@@ -1,6 +1,0 @@
-rdflib
-python-dateutil
-click
-requests
-bokeh
-pandas
